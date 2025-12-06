@@ -1,0 +1,15 @@
+# Python virtual env
+backend/.venv/
+**/.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VSCode
+.vscode/
+
+# Node / frontend
+node_modules/
+dist/
+build/
