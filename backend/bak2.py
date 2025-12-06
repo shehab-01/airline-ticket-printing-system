@@ -63,6 +63,20 @@ def replace_text_in_paragraph(paragraph, replacements):
             paragraph.add_run(full_text)
 
 
+# def replace_text_in_shape(shape, replacements):
+#     """Replace text in a shape"""
+#     if shape.has_text_frame:
+#         text_frame = shape.text_frame
+#         for paragraph in text_frame.paragraphs:
+#             replace_text_in_paragraph(paragraph, replacements)
+    
+#     # Handle tables
+#     if shape.has_table:
+#         for row in shape.table.rows:
+#             for cell in row.cells:
+#                 for paragraph in cell.text_frame.paragraphs:
+#                     replace_text_in_paragraph(paragraph, replacements)
+
 def replace_text_in_shape(shape, replacements):
     """Replace text in a shape, handling Groups, Tables, and TextFrames recursively"""
     
@@ -193,6 +207,109 @@ async def generate_ppt(file: UploadFile = File(...)):
         return ResData(
             data={'generated_files': generated_files, 'count': len(generated_files)}, 
             msg=f"Successfully generated {len(generated_files)} PowerPoint presentations"
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
+
+@router.post("/generate-both")
+async def generate_both(file: UploadFile = File(...)):
+    """Generate both Word and PowerPoint documents"""
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="File must be an Excel file (.xlsx or .xls)")
+    
+    try:
+        print("Reading the file")
+        df = pd.read_excel(file.file, sheet_name=0, header=0)
+        df.columns = df.columns.str.replace(' ', '_')
+        df = df.fillna("")
+        
+        # Create tickets
+        tickets = []
+        for index, row in df.iterrows():
+            raw_emd = row.get('emd1_(Extra_RQ)', '')
+            clean_emd = str(int(raw_emd)) if raw_emd != "" else ""
+
+            ticket = Ticket(
+                no=row['NO'],
+                rsvn_cfmd=row['RSVN_cfmd'],
+                ticket_type=row['ADT/LBR/CHD/INF'],
+                pax_name=row['PAX_name'],
+                emd1=clean_emd, 
+                pnr=row['PNR_Reference'],
+                travel_agency=row['Travel_Agency'],
+                ptn1_dep=row['PTN1-Dep'],
+                ptn1_dep_date=row['PTN1_Date'],
+                ptn1_dep_time=row['PTN1_Time'],
+                ptn1_arr=row['PTN1-Arr'],
+                ptn1_arr_date=row['PTN1_Date.1'],  
+                ptn1_arr_time=row['PTN1_Time.1'], 
+                ptn2_dep=row.get('PTN2-Dep', ''),
+                ptn2_dep_date=row.get('PTN2_Date', ''),
+                ptn2_dep_time=row.get('PTN2_Time', ''),
+                ptn2_arr=row.get('PTN2-Arr', ''),
+                ptn2_arr_date=row.get('PTN2_Date.1', ''),
+                ptn2_arr_time=row.get('PTN2_Time.1', '')
+            )
+            tickets.append(ticket)
+        
+        print(f"Created {len(tickets)} ticket objects")
+
+        # Create tickets directory
+        tickets_dir = Path("tickets")
+        tickets_dir.mkdir(exist_ok=True)
+        
+        # Templates
+        word_template = "Victory_Travels.docx"
+        ppt_template = "Victory_Travels.pptx"
+        
+        # Create ZIP file
+        zip_buffer = io.BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for ticket in tickets:
+                safe_pax_name = ticket.pax_name.replace('/', '_').replace('\\', '_')
+                safe_pnr = ticket.pnr.replace('/', '_')
+                context = asdict(ticket)
+                
+                # Add current date to context
+                context['date_now'] = datetime.now().strftime("%Y-%m-%d")
+                
+                # Generate Word document
+                doc = DocxTemplate(word_template)
+                doc.render(context)
+                
+                doc_filename = f"ticket_{safe_pax_name}_{safe_pnr}.docx"
+                doc_filepath = tickets_dir / doc_filename
+                doc.save(str(doc_filepath))
+                
+                doc_buffer = io.BytesIO()
+                doc.save(doc_buffer)
+                doc_buffer.seek(0)
+                zip_file.writestr(f"word/{doc_filename}", doc_buffer.getvalue())
+                
+                # Generate PowerPoint
+                prs = generate_ppt_from_template(ppt_template, ticket)
+                
+                ppt_filename = f"ticket_{safe_pax_name}_{safe_pnr}.pptx"
+                ppt_filepath = tickets_dir / ppt_filename
+                prs.save(str(ppt_filepath))
+                
+                # Read the saved file for ZIP
+                with open(str(ppt_filepath), 'rb') as f:
+                    zip_file.writestr(f"ppt/{ppt_filename}", f.read())
+                
+                print(f"Generated: {doc_filename} and {ppt_filename}")
+        
+        zip_buffer.seek(0)
+        
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={"Content-Disposition": "attachment; filename=all_tickets.zip"}
         )
 
     except Exception as e:
