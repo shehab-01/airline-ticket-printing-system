@@ -24,7 +24,6 @@ LibreOffice는 문서 처리 및 출력에 필요합니다.
 - Windows용 LibreOffice 다운로드 및 설치:
   - 🔗 https://www.libreoffice.org/download/download-libreoffice/
 
-설치 후 LibreOffice가 시스템에 제대로 설치되어 액세스 가능한지 확인하세요.
 
 ---
 
