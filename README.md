@@ -55,7 +55,7 @@ C 드라이브에 github라는 디렉토리를 생성합니다. 디렉토리 내
   ```
 
 - **옵션 B:** Google 드라이브에서 다운로드
-  - 🔗 https://drive.google.com/drive/folders/1JhalTYIr8r8w2Bk30BjbLQhE0ID7gmS8?usp=sharing
+  - 🔗 [Google Drive](https://drive.google.com/drive/folders/18qQPwAA0K9_1Hpk2J5exGZVyDEnYa55u?usp=sharing)
 
 ZIP 파일로 다운로드한 경우 프로젝트의 압축을 풉니다.
 
