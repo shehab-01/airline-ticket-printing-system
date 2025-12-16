@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
 # routes
-from api.routers import routers_ticket_generation
+from api.routers import ticket, agency
 
 
 class HealthCheck(BaseModel):
@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="My FastAPI Project",
+    title="Airline Ticketing System",
     description="A complete example with Pydantic, Router, and CORS",
     version="1.0.0",
     lifespan=lifespan,
@@ -29,7 +29,7 @@ app = FastAPI(
 # Origins 
 origins = [
     "http://localhost",
-    "http://localhost:3000", # Example for a React/Next.js frontend
+    "http://localhost:3000", 
 
 ]
 
@@ -58,7 +58,8 @@ async def health_check():
     return HealthCheck(status="ok")
 
 
-app.include_router(routers_ticket_generation.router)
+app.include_router(ticket.router)
+app.include_router(agency.router, tags=["Agencies"])
 
 async def server_startup():
     print("Supabase starting ... ")

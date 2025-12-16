@@ -1,15 +1,25 @@
-# Python virtual env
+# --- Python ---
 backend/.venv/
 **/.venv/
-
-# Python cache
 __pycache__/
 *.pyc
+# Ignore local environment variables
+.env
+.env.local
 
-# VSCode
-.vscode/
-
-# Node / frontend
+# --- Javascript / Next.js ---
 node_modules/
 dist/
 build/
+.next/
+# debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- VSCode ---
+.vscode/
+
+# --- OS Generated ---
+.DS_Store
+Thumbs.db
