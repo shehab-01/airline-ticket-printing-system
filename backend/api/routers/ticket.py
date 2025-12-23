@@ -16,8 +16,8 @@ from api.model.models import (
 from api.utils.pdf_converter import get_converter
 from api.utils.batch_manager import get_batch_manager
 from api.utils.file_handler import get_file_handler
-from api.utils.agency_manager import get_agency_manager  # ✅ NEW: Added agency manager
-from api.utils.ticket_number_manager import get_ticket_number_manager  # ✅ NEW: Added ticket number manager
+from api.utils.agency_manager import get_agency_manager  
+from api.utils.ticket_number_manager import get_ticket_number_manager  
 import pandas as pd
 from dataclasses import dataclass
 from typing import Optional
@@ -26,6 +26,7 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pathlib import Path
 from datetime import datetime
 import traceback
+from datetime import datetime, timedelta
 
 
 router = APIRouter(prefix="/api/v1/ticket")
@@ -80,11 +81,9 @@ def replace_text_in_paragraph(paragraph, replacements):
             bold = first_run.font.bold
             italic = first_run.font.italic
             
-            # Clear all runs
             for run in paragraph.runs:
                 run.text = ""
-            
-            # Set new text with preserved formatting
+           
             first_run.text = full_text
             if font_name:
                 first_run.font.name = font_name
@@ -97,6 +96,48 @@ def replace_text_in_paragraph(paragraph, replacements):
         else:
             paragraph.add_run(full_text)
 
+def calculate_flight_duration(dep_time_str: str, arr_time_str: str, offset_hours: int = 0) -> str:
+    """
+    Calculates flight duration: (Arr - Dep) + Offset.
+    Handles crossing midnight automatically.
+    Returns format "HH:MM" (e.g., "05:30").
+    """
+    if not dep_time_str or not arr_time_str:
+        return ""
+
+    try:
+        # 1. Parse string times to datetime objects
+        # We use a dummy date (today) just to calculate the time difference
+        fmt = "%H:%M"
+        # Sanitize input: remove whitespace/extra chars
+        t1 = datetime.strptime(str(dep_time_str).strip(), fmt)
+        t2 = datetime.strptime(str(arr_time_str).strip(), fmt)
+
+        # 2. Calculate initial difference
+        # If Arrival is earlier than Departure (e.g. Dep 23:00, Arr 02:00), 
+        # assume it crossed midnight and add 1 day to arrival.
+        if t2 < t1:
+            t2 += timedelta(days=1)
+
+        diff = t2 - t1
+
+        # 3. Apply the time difference offset (e.g., +3 hours)
+        # Note: We subtract or add based on the parameter
+        total_duration = diff + timedelta(hours=offset_hours)
+
+        # 4. Format back to HH:MM
+        total_seconds = int(total_duration.total_seconds())
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+
+        return f"{hours:02d}:{minutes:02d}"
+
+    except ValueError:
+        print(f"⚠️ Time format error: {dep_time_str} or {arr_time_str}")
+        return ""
+    except Exception as e:
+        print(f"⚠️ Duration calc error: {e}")
+        return ""
 
 # ============================================================================
 # AIRPORT DATA MAPPING
@@ -111,8 +152,7 @@ AIRPORT_DB = {
         "city": "DHAKA",
         "airport": "Hazrat Shahjalal International Airport"
     },
-    # Add more airports here as needed
-    # "JFK": {"city": "NEW YORK", "airport": "John F. Kennedy International Airport"},
+
 }
 
 def get_airport_details(code: Optional[str]):
@@ -120,7 +160,6 @@ def get_airport_details(code: Optional[str]):
     if not code:
         return "", ""
     
-    # Normalize code (uppercase, strip spaces)
     clean_code = str(code).strip().upper()
     
     data = AIRPORT_DB.get(clean_code)
@@ -128,8 +167,25 @@ def get_airport_details(code: Optional[str]):
     if data:
         return data["city"], data["airport"]
     
-    # Fallback: if code unknown, just return the code to avoid crashing or empty space
     return clean_code, clean_code
+
+def get_flight_number(airport_code: Optional[str]) -> str:
+    """
+    Returns flight number based on departing airport code.
+    ICN -> TW171
+    DAC -> TW172
+    """
+    if not airport_code:
+        return ""
+    
+    code = str(airport_code).strip().upper()
+    
+    if code == "ICN":
+        return "tw171" # Or "TW171" if you prefer uppercase
+    elif code == "DAC":
+        return "tw172" # Or "TW172"
+    
+    return ""
 
 
 def replace_text_in_shape(shape, replacements):
@@ -217,6 +273,13 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
     current_date = datetime.now().strftime("%Y-%m-%d")
     ptn1_dep_city, ptn1_dep_airport = get_airport_details(ticket.ptn1_dep)
     ptn1_arr_city, ptn1_arr_airport = get_airport_details(ticket.ptn1_arr)
+    flight_num_1 = get_flight_number(ticket.ptn1_dep)
+
+    fly_time_1 = calculate_flight_duration(
+        ticket.ptn1_dep_time, 
+        ticket.ptn1_arr_time, 
+        offset_hours=3
+    )
     
     replacements = {
         '{{date_now}}': current_date,
@@ -225,12 +288,16 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
         '{{Ticket_Number}}': ticket_number if ticket_number else '0000000000',  
         '{{EMD1}}': ticket.emd1 if ticket.emd1 else "0",
         '{{Ticket_Type}}' : ticket.ticket_type,
+        '{{Flight_number}}': flight_num_1,
+
         '{{PTN1-Dep}}': ticket.ptn1_dep,
         '{{PTN1-Arr}}': ticket.ptn1_arr,
         '{{PTN1_Date}}': ticket.ptn1_dep_date,
         '{{PTN1_Time}}': ticket.ptn1_dep_time,
         '{{PTN1_Date.1}}': ticket.ptn1_arr_date,
         '{{PTN1_Time.1}}': ticket.ptn1_arr_time,
+
+        '{{Fly_time_1}}': fly_time_1,
 
         '{{PTN1-Dep-City}}': ptn1_dep_city,
         '{{PTN1-Dep-Airport}}': ptn1_dep_airport,
@@ -241,6 +308,13 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
     if ticket.ptn2_dep:
         ptn2_dep_city, ptn2_dep_airport = get_airport_details(ticket.ptn2_dep)
         ptn2_arr_city, ptn2_arr_airport = get_airport_details(ticket.ptn2_arr)
+        flight_num_2 = get_flight_number(ticket.ptn2_dep)
+
+        fly_time_2 = calculate_flight_duration(
+            ticket.ptn2_dep_time, 
+            ticket.ptn2_arr_time, 
+            offset_hours=-3 
+        )
 
         replacements.update({
             '{{PTN2-Dep}}': ticket.ptn2_dep,
@@ -249,6 +323,9 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
             '{{PTN2_Time}}': ticket.ptn2_dep_time,
             '{{PTN2_Date.1}}': ticket.ptn2_arr_date,
             '{{PTN2_Time.1}}': ticket.ptn2_arr_time,
+            '{{Flight_number.1}}': flight_num_2,
+
+            '{{Fly_time_2}}': fly_time_2,
 
             '{{PTN2-Dep-City}}': ptn2_dep_city,
             '{{PTN2-Dep-Airport}}': ptn2_dep_airport,
@@ -305,7 +382,7 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
             for slide in prs.slides:
                 replace_image_in_slide(slide, 'agency_logo', logo_path)
         else:
-            print(f"  ⚠️  Agency logo file not found: {logo_path}")
+            print(f"Agency logo file not found: {logo_path}")
     
     return prs
 
