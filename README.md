@@ -24,7 +24,6 @@ LibreOffice는 문서 처리 및 출력에 필요합니다.
 - Windows용 LibreOffice 다운로드 및 설치:
   - 🔗 https://www.libreoffice.org/download/download-libreoffice/
 
-설치 후 LibreOffice가 시스템에 제대로 설치되어 액세스 가능한지 확인하세요.
 
 ---
 
@@ -56,7 +55,7 @@ C 드라이브에 github라는 디렉토리를 생성합니다. 디렉토리 내
   ```
 
 - **옵션 B:** Google 드라이브에서 다운로드
-  - 🔗 https://drive.google.com/drive/folders/1JhalTYIr8r8w2Bk30BjbLQhE0ID7gmS8?usp=sharing
+  - 🔗 [Google Drive](https://drive.google.com/drive/folders/18qQPwAA0K9_1Hpk2J5exGZVyDEnYa55u?usp=sharing)
 
 ZIP 파일로 다운로드한 경우 프로젝트의 압축을 풉니다.
 
