@@ -280,6 +280,11 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
         ticket.ptn1_arr_time, 
         offset_hours=3
     )
+
+    luggage_allowance = "23 kg + 23 kg"
+    
+    if str(ticket.ticket_type).strip() == "BOS":
+        luggage_allowance = "23 kg"
     
     replacements = {
         '{{date_now}}': current_date,
@@ -288,6 +293,7 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
         '{{Ticket_Number}}': ticket_number if ticket_number else '0000000000',  
         '{{EMD1}}': ticket.emd1 if ticket.emd1 else "0",
         '{{Ticket_Type}}' : ticket.ticket_type,
+        '{{luggage}}': luggage_allowance,
         '{{Flight_number}}': flight_num_1,
 
         '{{PTN1-Dep}}': ticket.ptn1_dep,
