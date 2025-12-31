@@ -60,8 +60,26 @@ class Ticket:
 
 
 # ============================================================================
-# HELPER FUNCTIONS (Keep your existing PPTX functions)
+# HELPER FUNCTIONS 
 # ============================================================================
+
+def normalize_time(time_str: str) -> str:
+  
+    if not time_str:
+        return ""
+    
+    time_str = str(time_str).strip()
+    
+   
+    for fmt in ["%H:%M:%S", "%H:%M"]:
+        try:
+            t = datetime.strptime(time_str, fmt)
+            return t.strftime("%H:%M")  # Always return HH:MM
+        except ValueError:
+            continue
+    
+    # If parsing fails, return as-is
+    return time_str
 
 def replace_text_in_paragraph(paragraph, replacements):
     full_text = paragraph.text
@@ -106,37 +124,43 @@ def calculate_flight_duration(dep_time_str: str, arr_time_str: str, offset_hours
         return ""
 
     try:
-        # 1. Parse string times to datetime objects
-        # We use a dummy date (today) just to calculate the time difference
-        fmt = "%H:%M"
         # Sanitize input: remove whitespace/extra chars
-        t1 = datetime.strptime(str(dep_time_str).strip(), fmt)
-        t2 = datetime.strptime(str(arr_time_str).strip(), fmt)
+        dep_time_str = str(dep_time_str).strip()
+        arr_time_str = str(arr_time_str).strip()
+        
+        # Try to parse with seconds first (HH:MM:SS), then without (HH:MM)
+        for fmt in ["%H:%M:%S", "%H:%M"]:
+            try:
+                t1 = datetime.strptime(dep_time_str, fmt)
+                t2 = datetime.strptime(arr_time_str, fmt)
+                break
+            except ValueError:
+                continue
+        else:
+            # If neither format works, raise error
+            raise ValueError(f"Cannot parse time format: {dep_time_str} or {arr_time_str}")
 
-        # 2. Calculate initial difference
-        # If Arrival is earlier than Departure (e.g. Dep 23:00, Arr 02:00), 
-        # assume it crossed midnight and add 1 day to arrival.
+        # Calculate initial difference
         if t2 < t1:
             t2 += timedelta(days=1)
 
         diff = t2 - t1
 
-        # 3. Apply the time difference offset (e.g., +3 hours)
-        # Note: We subtract or add based on the parameter
+        # Apply the time difference offset (e.g., +3 hours)
         total_duration = diff + timedelta(hours=offset_hours)
 
-        # 4. Format back to HH:MM
+        # Format back to HH:MM
         total_seconds = int(total_duration.total_seconds())
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
 
         return f"{hours:02d}:{minutes:02d}"
 
-    except ValueError:
-        print(f"⚠️ Time format error: {dep_time_str} or {arr_time_str}")
+    except ValueError as ve:
+        print(f"Time format error: {dep_time_str} or {arr_time_str} - {ve}")
         return ""
     except Exception as e:
-        print(f"⚠️ Duration calc error: {e}")
+        print(f"Duration calc error: {e}")
         return ""
 
 # ============================================================================
@@ -181,9 +205,9 @@ def get_flight_number(airport_code: Optional[str]) -> str:
     code = str(airport_code).strip().upper()
     
     if code == "ICN":
-        return "tw171" # Or "TW171" if you prefer uppercase
+        return "tw171" 
     elif code == "DAC":
-        return "tw172" # Or "TW172"
+        return "tw172" 
     
     return ""
 
@@ -213,15 +237,14 @@ def replace_text_in_shape(shape, replacements):
 def replace_image_in_slide(slide, placeholder_name: str, new_image_path: Path):
    
     if not new_image_path or not new_image_path.exists():
-        print(f"  ⚠️  Image not found: {new_image_path}")
+        print(f"  Image not found: {new_image_path}")
         return False
     
     for shape in slide.shapes:
-        # Check if this is the placeholder image
-        # Try both name and alt text (description)
+        
         shape_name = shape.name if hasattr(shape, 'name') else ''
         
-        # Check alt text (some versions store it differently)
+        
         try:
             alt_text = shape._element.get('{http://schemas.openxmlformats.org/drawingml/2006/main}name', '')
         except:
@@ -255,11 +278,11 @@ def replace_image_in_slide(slide, placeholder_name: str, new_image_path: Path):
                     width, height
                 )
                 
-                print(f"  ✓ Logo replaced: {new_image_path.name}")
+                print(f"Logo replaced: {new_image_path.name}")
                 return True
                 
             except Exception as e:
-                print(f"  ❌ Error replacing image: {e}")
+                print(f"Error replacing image: {e}")
                 return False
     
     print(f"  Placeholder image '{placeholder_name}' not found in slide")
@@ -275,9 +298,12 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
     ptn1_arr_city, ptn1_arr_airport = get_airport_details(ticket.ptn1_arr)
     flight_num_1 = get_flight_number(ticket.ptn1_dep)
 
+    ptn1_dep_time = normalize_time(ticket.ptn1_dep_time)
+    ptn1_arr_time = normalize_time(ticket.ptn1_arr_time)
+
     fly_time_1 = calculate_flight_duration(
-        ticket.ptn1_dep_time, 
-        ticket.ptn1_arr_time, 
+        ptn1_dep_time,  
+        ptn1_arr_time,  
         offset_hours=3
     )
 
@@ -299,9 +325,9 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
         '{{PTN1-Dep}}': ticket.ptn1_dep,
         '{{PTN1-Arr}}': ticket.ptn1_arr,
         '{{PTN1_Date}}': ticket.ptn1_dep_date,
-        '{{PTN1_Time}}': ticket.ptn1_dep_time,
+        '{{PTN1_Time}}': ptn1_dep_time,
         '{{PTN1_Date.1}}': ticket.ptn1_arr_date,
-        '{{PTN1_Time.1}}': ticket.ptn1_arr_time,
+        '{{PTN1_Time.1}}': ptn1_arr_time,
 
         '{{Fly_time_1}}': fly_time_1,
 
@@ -316,9 +342,12 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
         ptn2_arr_city, ptn2_arr_airport = get_airport_details(ticket.ptn2_arr)
         flight_num_2 = get_flight_number(ticket.ptn2_dep)
 
+        ptn2_dep_time = normalize_time(ticket.ptn2_dep_time)
+        ptn2_arr_time = normalize_time(ticket.ptn2_arr_time)
+
         fly_time_2 = calculate_flight_duration(
-            ticket.ptn2_dep_time, 
-            ticket.ptn2_arr_time, 
+            ptn2_dep_time,  
+            ptn2_arr_time,  
             offset_hours=-3 
         )
 
@@ -326,9 +355,9 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
             '{{PTN2-Dep}}': ticket.ptn2_dep,
             '{{PTN2-Arr}}': ticket.ptn2_arr,
             '{{PTN2_Date}}': ticket.ptn2_dep_date,
-            '{{PTN2_Time}}': ticket.ptn2_dep_time,
+            '{{PTN2_Time}}': ptn2_dep_time,
             '{{PTN2_Date.1}}': ticket.ptn2_arr_date,
-            '{{PTN2_Time.1}}': ticket.ptn2_arr_time,
+            '{{PTN2_Time.1}}': ptn2_arr_time,
             '{{Flight_number.1}}': flight_num_2,
 
             '{{Fly_time_2}}': fly_time_2,
@@ -364,7 +393,7 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
         })
         print(f" Using agency: {agency.get('agency_name')}")
     else:
-        # Use defaults if agency not found
+       
         replacements.update({
             '{{agency_name}}': ticket.travel_agency if ticket.travel_agency else '',
             '{{agency_owner}}': '',

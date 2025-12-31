@@ -7,6 +7,9 @@ __pycache__/
 .env
 .env.local
 
+backend/data/
+backend/output/
+
 # --- Javascript / Next.js ---
 node_modules/
 dist/
