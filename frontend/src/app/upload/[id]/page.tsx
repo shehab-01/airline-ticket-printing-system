@@ -191,6 +191,22 @@ export default function BatchDetailPage({
     }
   };
 
+  const handleDownloadZip = async (batchId: string) => {
+    try {
+      const blob = await api.downloadBatchZip(batchId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `batch_${batchId}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error("Download failed", error);
+      alert("Could not download batch");
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm border p-8 min-h-[80vh]">
       {/* --- Error Message --- */}
@@ -280,7 +296,7 @@ export default function BatchDetailPage({
                   variant="outline"
                   size="sm"
                   className="ml-4 gap-2"
-                  onClick={() => api.downloadBatchZip(batchId)}
+                  onClick={() => handleDownloadZip(batchId)}
                 >
                   <Download className="h-4 w-4" /> Download All (ZIP)
                 </Button>

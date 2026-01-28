@@ -52,6 +52,7 @@ class Ticket:
     ptn1_arr_date: str
     ptn1_arr_time: str
     ptn2_dep: Optional[str] = None
+    emd2: Optional[str] = ""
     ptn2_dep_date: Optional[str] = None
     ptn2_dep_time: Optional[str] = None
     ptn2_arr: Optional[str] = None
@@ -174,7 +175,7 @@ AIRPORT_DB = {
     },
     "DAC": {
         "city": "DHAKA",
-        "airport": "Hazrat Shahjalal International Airport"
+        "airport": "Hazrat Shahjalal International Airport Terminal - 2"
     },
 
 }
@@ -301,16 +302,31 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
     ptn1_dep_time = normalize_time(ticket.ptn1_dep_time)
     ptn1_arr_time = normalize_time(ticket.ptn1_arr_time)
 
+    # === Determine offset  Flight 1 ===
+    offset_1 = 0
+    # DAC -> ICN 
+    if ticket.ptn1_dep == "DAC" and ticket.ptn1_arr == "ICN":
+        offset_1 = -3 
+    # ICN -> DAC 
+    elif ticket.ptn1_dep == "ICN" and ticket.ptn1_arr == "DAC":
+        offset_1 = 3
+
     fly_time_1 = calculate_flight_duration(
         ptn1_dep_time,  
         ptn1_arr_time,  
-        offset_hours=3
+        offset_hours=offset_1 
     )
+    
 
     luggage_allowance = "23 kg + 23 kg"
+    cabin_luggage = "Cabin Luggage : 10 kg"
     
     if str(ticket.ticket_type).strip() == "BOS":
         luggage_allowance = "23 kg"
+
+    if str(ticket.ticket_type).strip() == "INFANT":
+        luggage_allowance = "10 kg"
+        cabin_luggage = ""
     
     replacements = {
         '{{date_now}}': current_date,
@@ -320,6 +336,7 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
         '{{EMD1}}': ticket.emd1 if ticket.emd1 else "0",
         '{{Ticket_Type}}' : ticket.ticket_type,
         '{{luggage}}': luggage_allowance,
+        '{{Cabin_luggage}}': cabin_luggage,
         '{{Flight_number}}': flight_num_1,
 
         '{{PTN1-Dep}}': ticket.ptn1_dep,
@@ -345,11 +362,18 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
         ptn2_dep_time = normalize_time(ticket.ptn2_dep_time)
         ptn2_arr_time = normalize_time(ticket.ptn2_arr_time)
 
+        offset_2 = 0
+        if ticket.ptn2_dep == "DAC" and ticket.ptn2_arr == "ICN":
+            offset_2 = -3
+        elif ticket.ptn2_dep == "ICN" and ticket.ptn2_arr == "DAC":
+            offset_2 = 3
+
         fly_time_2 = calculate_flight_duration(
             ptn2_dep_time,  
             ptn2_arr_time,  
-            offset_hours=-3 
+            offset_hours=offset_2 # Use dynamic offset
         )
+       
 
         replacements.update({
             '{{PTN2-Dep}}': ticket.ptn2_dep,
@@ -359,6 +383,7 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
             '{{PTN2_Date.1}}': ticket.ptn2_arr_date,
             '{{PTN2_Time.1}}': ptn2_arr_time,
             '{{Flight_number.1}}': flight_num_2,
+            '{{EMD2}}': ticket.emd2 if ticket.emd2 else "0",
 
             '{{Fly_time_2}}': fly_time_2,
 
@@ -380,6 +405,7 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
             '{{PTN2-Dep-Airport}}': '',
             '{{PTN2-Arr-City}}': '',
             '{{PTN2-Arr-Airport}}': '',
+            '{{EMD2}}': '',
         })
     
     #  Add agency information if found
@@ -393,7 +419,7 @@ def generate_ppt_from_template(template_path, ticket, agency=None, ticket_number
         })
         print(f" Using agency: {agency.get('agency_name')}")
     else:
-       
+        
         replacements.update({
             '{{agency_name}}': ticket.travel_agency if ticket.travel_agency else '',
             '{{agency_owner}}': '',
@@ -430,7 +456,9 @@ def parse_excel_to_tickets(df: pd.DataFrame) -> list[Ticket]:
     tickets = []
     for index, row in df.iterrows():
         raw_emd = row.get('emd1_(Extra_RQ)', '')
+        raw_emd2 = row.get('emd2_(Extra_RQ)', '')
         clean_emd = str(int(raw_emd)) if raw_emd != "" else ""
+        clean_emd2 = str(int(raw_emd2)) if raw_emd2 != "" else ""
 
         ticket = Ticket(
             no=row['NO'],
@@ -438,6 +466,7 @@ def parse_excel_to_tickets(df: pd.DataFrame) -> list[Ticket]:
             ticket_type=row['ADT/LBR/CHD/INF'],
             pax_name=row['PAX_name'],
             emd1=clean_emd, 
+            emd2=clean_emd2,
             pnr=row['PNR_Reference'],
             travel_agency=row.get('Travel_Agency', ''),
             ptn1_dep=row['PTN1-Dep'],
@@ -467,8 +496,8 @@ def generate_tickets_for_batch(batch_id: str, tickets: list[Ticket]):
     manager = get_batch_manager()
     converter = get_converter()
     file_handler = get_file_handler()
-    agency_manager = get_agency_manager()  # ✅ NEW: Get agency manager
-    ticket_num_manager = get_ticket_number_manager()  # ✅ NEW: Get ticket number manager
+    agency_manager = get_agency_manager() 
+    ticket_num_manager = get_ticket_number_manager()  
     
     # template_path = Path("templates/ticket_template.pptx")
     batch_dir = manager.get_batch_dir(batch_id)
